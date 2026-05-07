@@ -45,7 +45,7 @@ CONTRATO_MODELO = "contrato_modelo.docx"
 
 BASE_URL = os.getenv(
     "BASE_URL",
-    "http://127.0.0.1:8000"
+    "https://web-production-a841e.up.railway.app"
 )
 
 # =========================================================
