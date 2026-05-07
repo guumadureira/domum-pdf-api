@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+docxtpl
+python-docx
+fpdf2
+pillow
+jinja2
+aiofiles
