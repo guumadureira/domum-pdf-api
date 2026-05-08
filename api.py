@@ -1,6 +1,9 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
 from pydantic import BaseModel
+from typing import List
 
 from docxtpl import DocxTemplate
 
@@ -18,7 +21,7 @@ import requests
 
 app = FastAPI(
     title="DOMUM PDF API",
-    version="3.0.0",
+    version="3.1.0",
     description="""
 API profissional para geração automática de:
 
@@ -52,7 +55,10 @@ BASE_URL = os.getenv(
 # WHATSAPP META CONFIG
 # =========================================================
 
-VERIFY_TOKEN = "domum_verify"
+VERIFY_TOKEN = os.getenv(
+    "VERIFY_TOKEN",
+    "domum_verify"
+)
 
 WHATSAPP_TOKEN = os.getenv(
     "WHATSAPP_TOKEN",
@@ -156,23 +162,35 @@ def converter_para_pdf(docx_saida):
     Compatível com Railway/Linux.
     """
 
-    subprocess.run([
+    try:
 
-        "libreoffice",
+        processo = subprocess.run(
 
-        "--headless",
+            [
+                "libreoffice",
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                PASTA_SAIDA,
+                docx_saida
+            ],
 
-        "--convert-to",
-        "pdf",
+            capture_output=True,
+            text=True
+        )
 
-        "--outdir",
-        PASTA_SAIDA,
+        print(processo.stdout)
+        print(processo.stderr)
 
-        docx_saida
+        time.sleep(2)
 
-    ])
+    except Exception as erro:
 
-    time.sleep(2)
+        print(f"Erro ao converter PDF: {erro}")
+        raise Exception(
+            "LibreOffice não encontrado no servidor."
+        )
 
 
 def enviar_whatsapp(numero, mensagem):
@@ -208,13 +226,21 @@ def enviar_whatsapp(numero, mensagem):
         }
     }
 
-    response = requests.post(
-        url,
-        headers=headers,
-        json=payload
-    )
+    try:
 
-    print(response.text)
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        print(response.status_code)
+        print(response.text)
+
+    except Exception as erro:
+
+        print(f"Erro WhatsApp: {erro}")
 
 # =========================================================
 # MODELS
@@ -223,44 +249,27 @@ def enviar_whatsapp(numero, mensagem):
 class PropostaRequest(BaseModel):
 
     cliente: str
-
     cidade: str
-
     objeto: str
-
-    servicos: list[str]
-
+    servicos: List[str]
     valor: str
-
     pagamento: str
 
 
 class ContratoRequest(BaseModel):
 
     contratante: str
-
     cpf: str
-
     rg: str
-
     profissao: str
-
     endereco_proprietario: str
-
     endereco_obra: str
-
     telefone: str
-
     email: str
-
     cidade: str
-
     objeto: str
-
-    servicos: list[str]
-
+    servicos: List[str]
     valor: str
-
     pagamento: str
 
 # =========================================================
@@ -272,49 +281,53 @@ class ContratoRequest(BaseModel):
 def home():
 
     return {
-
-        "status":
-        "API DOMUM ONLINE",
-
-        "versao":
-        "3.0.0"
+        "status": "API DOMUM ONLINE",
+        "versao": "3.1.0"
     }
 
 # =========================================================
 # WEBHOOK META
 # =========================================================
 
-from fastapi import Query
-
- @app.get("/webhook")
+@app.get("/webhook")
 async def verify_webhook(
+
     hub_mode: str = Query(None, alias="hub.mode"),
     hub_verify_token: str = Query(None, alias="hub.verify_token"),
     hub_challenge: str = Query(None, alias="hub.challenge")
+
 ):
 
     print("VALIDANDO WEBHOOK...")
-    print(hub_verify_token)
+    print(f"MODE: {hub_mode}")
+    print(f"TOKEN: {hub_verify_token}")
 
     if hub_verify_token == VERIFY_TOKEN:
-        return int(hub_challenge)
 
-    return {
-        "error": "Token inválido"
-    }
+        return PlainTextResponse(
+            content=hub_challenge
+        )
 
+    return JSONResponse(
+
+        status_code=403,
+
+        content={
+            "error": "Token inválido"
+        }
+    )
 
 @app.post("/webhook")
 async def receive_webhook(request: Request):
 
-    data = await request.json()
-
-    print("\n============================")
-    print("MENSAGEM RECEBIDA")
-    print("============================")
-    print(data)
-
     try:
+
+        data = await request.json()
+
+        print("\n============================")
+        print("MENSAGEM RECEBIDA")
+        print("============================")
+        print(data)
 
         entry = data["entry"][0]
 
@@ -322,31 +335,49 @@ async def receive_webhook(request: Request):
 
         value = changes["value"]
 
-        if "messages" in value:
+        if "messages" not in value:
 
-            mensagem = value["messages"][0]
+            return {
+                "status": "sem_mensagem"
+            }
 
-            numero = mensagem["from"]
+        mensagem = value["messages"][0]
 
-            if mensagem["type"] == "text":
+        numero = mensagem["from"]
 
-                texto = mensagem["text"]["body"]
+        tipo = mensagem["type"]
 
-                print(f"\nMensagem de {numero}")
-                print(texto)
+        print(f"\nMensagem de {numero}")
+        print(f"Tipo: {tipo}")
 
-                enviar_whatsapp(
-                    numero,
-                    f"DOMUM recebeu sua mensagem: {texto}"
-                )
+        if tipo == "text":
+
+            texto = mensagem["text"]["body"]
+
+            print(texto)
+
+            enviar_whatsapp(
+                numero,
+                f"DOMUM recebeu sua mensagem:\n\n{texto}"
+            )
+
+        return {
+            "status": "ok"
+        }
 
     except Exception as erro:
 
         print(f"Erro webhook: {erro}")
 
-    return {
-        "status": "ok"
-    }
+        return JSONResponse(
+
+            status_code=500,
+
+            content={
+                "status": "erro",
+                "mensagem": str(erro)
+            }
+        )
 
 # =========================================================
 # GERAR PROPOSTA
@@ -428,14 +459,15 @@ def gerar_proposta(
             pdf_saida
         ):
 
-            return {
+            return JSONResponse(
 
-                "status":
-                "erro",
+                status_code=500,
 
-                "mensagem":
-                "PDF não foi gerado."
-            }
+                content={
+                    "status": "erro",
+                    "mensagem": "PDF não foi gerado."
+                }
+            )
 
         url_pdf = (
             f"{BASE_URL}/arquivos/"
@@ -444,11 +476,9 @@ def gerar_proposta(
 
         return {
 
-            "status":
-            "ok",
+            "status": "ok",
 
-            "tipo":
-            "proposta",
+            "tipo": "proposta",
 
             "arquivo":
             os.path.basename(
@@ -461,14 +491,15 @@ def gerar_proposta(
 
     except Exception as erro:
 
-        return {
+        return JSONResponse(
 
-            "status":
-            "erro",
+            status_code=500,
 
-            "mensagem":
-            str(erro)
-        }
+            content={
+                "status": "erro",
+                "mensagem": str(erro)
+            }
+        )
 
 # =========================================================
 # GERAR CONTRATO
@@ -571,14 +602,15 @@ def gerar_contrato(
             pdf_saida
         ):
 
-            return {
+            return JSONResponse(
 
-                "status":
-                "erro",
+                status_code=500,
 
-                "mensagem":
-                "PDF não foi gerado."
-            }
+                content={
+                    "status": "erro",
+                    "mensagem": "PDF não foi gerado."
+                }
+            )
 
         url_pdf = (
             f"{BASE_URL}/arquivos/"
@@ -587,11 +619,9 @@ def gerar_contrato(
 
         return {
 
-            "status":
-            "ok",
+            "status": "ok",
 
-            "tipo":
-            "contrato",
+            "tipo": "contrato",
 
             "arquivo":
             os.path.basename(
@@ -604,11 +634,12 @@ def gerar_contrato(
 
     except Exception as erro:
 
-        return {
+        return JSONResponse(
 
-            "status":
-            "erro",
+            status_code=500,
 
-            "mensagem":
-            str(erro)
-        }
+            content={
+                "status": "erro",
+                "mensagem": str(erro)
+            }
+        )
