@@ -542,3 +542,28 @@ def gerar_contrato(
             "mensagem":
             str(erro)
         }
+
+from fastapi import Request
+
+VERIFY_TOKEN = "domum_verify"
+
+@app.get("/webhook")
+async def verify_webhook(
+    hub_mode: str = None,
+    hub_verify_token: str = None,
+    hub_challenge: str = None
+):
+    if hub_verify_token == VERIFY_TOKEN:
+        return int(hub_challenge)
+
+    return {"error": "Token inválido"}
+
+
+@app.post("/webhook")
+async def receive_webhook(request: Request):
+    data = await request.json()
+
+    print("Mensagem recebida:")
+    print(data)
+
+    return {"status": "ok"}
