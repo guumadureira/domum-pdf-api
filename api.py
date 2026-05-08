@@ -7,6 +7,8 @@ from typing import List
 
 from docxtpl import DocxTemplate
 
+from openai import OpenAI
+
 from datetime import datetime
 
 import subprocess
@@ -21,13 +23,15 @@ import requests
 
 app = FastAPI(
     title="DOMUM PDF API",
-    version="3.1.0",
+    version="4.0.0",
     description="""
-API profissional para geração automática de:
+API profissional para:
 
-- Propostas comerciais
-- Contratos empresariais
-- Webhook WhatsApp Meta Cloud API
+- WhatsApp Meta Cloud API
+- Atendimento IA com OpenAI
+- Geração automática de propostas
+- Geração automática de contratos
+- PDFs automáticos
 
 DOMUM Engenharia
 """
@@ -68,6 +72,19 @@ WHATSAPP_TOKEN = os.getenv(
 PHONE_NUMBER_ID = os.getenv(
     "PHONE_NUMBER_ID",
     ""
+)
+
+# =========================================================
+# OPENAI
+# =========================================================
+
+OPENAI_API_KEY = os.getenv(
+    "OPENAI_API_KEY",
+    ""
+)
+
+client = OpenAI(
+    api_key=OPENAI_API_KEY
 )
 
 # =========================================================
@@ -157,11 +174,6 @@ def formatar_servicos(servicos):
 
 def converter_para_pdf(docx_saida):
 
-    """
-    Converte DOCX para PDF usando LibreOffice.
-    Compatível com Railway/Linux.
-    """
-
     try:
 
         processo = subprocess.run(
@@ -188,16 +200,73 @@ def converter_para_pdf(docx_saida):
     except Exception as erro:
 
         print(f"Erro ao converter PDF: {erro}")
+
         raise Exception(
             "LibreOffice não encontrado no servidor."
         )
 
+# =========================================================
+# OPENAI IA
+# =========================================================
+
+def responder_ia(mensagem_usuario):
+
+    try:
+
+        resposta = client.chat.completions.create(
+
+            model="gpt-4.1-mini",
+
+            messages=[
+
+                {
+                    "role": "system",
+                    "content": """
+Você é a assistente virtual da DOMUM Engenharia.
+
+Seu comportamento:
+
+- profissional
+- objetiva
+- amigável
+- clara
+- especialista em engenharia
+
+Você ajuda clientes com:
+- propostas
+- contratos
+- obras
+- projetos
+- engenharia civil
+
+Nunca invente informações.
+"""
+                },
+
+                {
+                    "role": "user",
+                    "content": mensagem_usuario
+                }
+            ],
+
+            temperature=0.7
+        )
+
+        return resposta.choices[0].message.content
+
+    except Exception as erro:
+
+        print(f"Erro OpenAI: {erro}")
+
+        return (
+            "Desculpe, ocorreu um erro no atendimento."
+        )
+
+# =========================================================
+# WHATSAPP
+# =========================================================
 
 def enviar_whatsapp(numero, mensagem):
-
-    """
-    Envia mensagem via Meta Cloud API
-    """
 
     if not WHATSAPP_TOKEN:
         print("WHATSAPP_TOKEN não configurado")
@@ -282,7 +351,7 @@ def home():
 
     return {
         "status": "API DOMUM ONLINE",
-        "versao": "3.1.0"
+        "versao": "4.0.0"
     }
 
 # =========================================================
@@ -299,8 +368,6 @@ async def verify_webhook(
 ):
 
     print("VALIDANDO WEBHOOK...")
-    print(f"MODE: {hub_mode}")
-    print(f"TOKEN: {hub_verify_token}")
 
     if hub_verify_token == VERIFY_TOKEN:
 
@@ -335,6 +402,14 @@ async def receive_webhook(request: Request):
 
         value = changes["value"]
 
+        # Ignora status Meta
+        if "statuses" in value:
+
+            return {
+                "status": "status_update"
+            }
+
+        # Sem mensagens
         if "messages" not in value:
 
             return {
@@ -350,16 +425,30 @@ async def receive_webhook(request: Request):
         print(f"\nMensagem de {numero}")
         print(f"Tipo: {tipo}")
 
-        if tipo == "text":
+        if tipo != "text":
 
-            texto = mensagem["text"]["body"]
+            return {
+                "status": "tipo_nao_suportado"
+            }
 
-            print(texto)
+        texto = mensagem["text"]["body"]
 
-            enviar_whatsapp(
-                numero,
-                f"DOMUM recebeu sua mensagem:\n\n{texto}"
-            )
+        print("\nTEXTO:")
+        print(texto)
+
+        # =========================================================
+        # IA RESPONDE
+        # =========================================================
+
+        resposta_ia = responder_ia(texto)
+
+        print("\nRESPOSTA IA:")
+        print(resposta_ia)
+
+        enviar_whatsapp(
+            numero,
+            resposta_ia
+        )
 
         return {
             "status": "ok"
