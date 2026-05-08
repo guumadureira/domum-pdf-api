@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -10,6 +10,7 @@ import subprocess
 import os
 import re
 import time
+import requests
 
 # =========================================================
 # APP
@@ -17,12 +18,13 @@ import time
 
 app = FastAPI(
     title="DOMUM PDF API",
-    version="2.0.0",
+    version="3.0.0",
     description="""
 API profissional para geração automática de:
 
 - Propostas comerciais
 - Contratos empresariais
+- Webhook WhatsApp Meta Cloud API
 
 DOMUM Engenharia
 """
@@ -40,12 +42,26 @@ CONTRATO_MODELO = "contrato_modelo.docx"
 # =========================================================
 # URL BASE
 # =========================================================
-# ALTERAR APÓS DEPLOY NO RAILWAY
-# =========================================================
 
 BASE_URL = os.getenv(
     "BASE_URL",
     "https://web-production-a841e.up.railway.app"
+)
+
+# =========================================================
+# WHATSAPP META CONFIG
+# =========================================================
+
+VERIFY_TOKEN = "domum_verify"
+
+WHATSAPP_TOKEN = os.getenv(
+    "WHATSAPP_TOKEN",
+    ""
+)
+
+PHONE_NUMBER_ID = os.getenv(
+    "PHONE_NUMBER_ID",
+    ""
 )
 
 # =========================================================
@@ -158,6 +174,48 @@ def converter_para_pdf(docx_saida):
 
     time.sleep(2)
 
+
+def enviar_whatsapp(numero, mensagem):
+
+    """
+    Envia mensagem via Meta Cloud API
+    """
+
+    if not WHATSAPP_TOKEN:
+        print("WHATSAPP_TOKEN não configurado")
+        return
+
+    if not PHONE_NUMBER_ID:
+        print("PHONE_NUMBER_ID não configurado")
+        return
+
+    url = (
+        f"https://graph.facebook.com/v21.0/"
+        f"{PHONE_NUMBER_ID}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "body": mensagem
+        }
+    }
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=payload
+    )
+
+    print(response.text)
+
 # =========================================================
 # MODELS
 # =========================================================
@@ -219,7 +277,70 @@ def home():
         "API DOMUM ONLINE",
 
         "versao":
-        "2.0.0"
+        "3.0.0"
+    }
+
+# =========================================================
+# WEBHOOK META
+# =========================================================
+
+@app.get("/webhook")
+async def verify_webhook(
+    hub_mode: str = None,
+    hub_verify_token: str = None,
+    hub_challenge: str = None
+):
+
+    if hub_verify_token == VERIFY_TOKEN:
+        return int(hub_challenge)
+
+    return {
+        "error": "Token inválido"
+    }
+
+
+@app.post("/webhook")
+async def receive_webhook(request: Request):
+
+    data = await request.json()
+
+    print("\n============================")
+    print("MENSAGEM RECEBIDA")
+    print("============================")
+    print(data)
+
+    try:
+
+        entry = data["entry"][0]
+
+        changes = entry["changes"][0]
+
+        value = changes["value"]
+
+        if "messages" in value:
+
+            mensagem = value["messages"][0]
+
+            numero = mensagem["from"]
+
+            if mensagem["type"] == "text":
+
+                texto = mensagem["text"]["body"]
+
+                print(f"\nMensagem de {numero}")
+                print(texto)
+
+                enviar_whatsapp(
+                    numero,
+                    f"DOMUM recebeu sua mensagem: {texto}"
+                )
+
+    except Exception as erro:
+
+        print(f"Erro webhook: {erro}")
+
+    return {
+        "status": "ok"
     }
 
 # =========================================================
@@ -233,10 +354,6 @@ def gerar_proposta(
 ):
 
     try:
-
-        # ======================================
-        # CONTEXTO
-        # ======================================
 
         contexto = {
 
@@ -264,10 +381,6 @@ def gerar_proposta(
             data_atual()
         }
 
-        # ======================================
-        # NOMES DOS ARQUIVOS
-        # ======================================
-
         nome = limpar_nome(
             dados.cliente
         )
@@ -290,10 +403,6 @@ def gerar_proposta(
             f"{base}.pdf"
         )
 
-        # ======================================
-        # GERAR DOCX
-        # ======================================
-
         doc = DocxTemplate(
             PROPOSTA_MODELO
         )
@@ -306,17 +415,9 @@ def gerar_proposta(
             docx_saida
         )
 
-        # ======================================
-        # CONVERTER PDF
-        # ======================================
-
         converter_para_pdf(
             docx_saida
         )
-
-        # ======================================
-        # VALIDAR PDF
-        # ======================================
 
         if not os.path.exists(
             pdf_saida
@@ -331,18 +432,10 @@ def gerar_proposta(
                 "PDF não foi gerado."
             }
 
-        # ======================================
-        # URL PÚBLICA
-        # ======================================
-
         url_pdf = (
             f"{BASE_URL}/arquivos/"
             f"{os.path.basename(pdf_saida)}"
         )
-
-        # ======================================
-        # RETORNO
-        # ======================================
 
         return {
 
@@ -383,10 +476,6 @@ def gerar_contrato(
 ):
 
     try:
-
-        # ======================================
-        # CONTEXTO
-        # ======================================
 
         contexto = {
 
@@ -435,10 +524,6 @@ def gerar_contrato(
             data_atual()
         }
 
-        # ======================================
-        # NOMES DOS ARQUIVOS
-        # ======================================
-
         nome = limpar_nome(
             dados.contratante
         )
@@ -461,10 +546,6 @@ def gerar_contrato(
             f"{base}.pdf"
         )
 
-        # ======================================
-        # GERAR DOCX
-        # ======================================
-
         doc = DocxTemplate(
             CONTRATO_MODELO
         )
@@ -477,17 +558,9 @@ def gerar_contrato(
             docx_saida
         )
 
-        # ======================================
-        # CONVERTER PDF
-        # ======================================
-
         converter_para_pdf(
             docx_saida
         )
-
-        # ======================================
-        # VALIDAR PDF
-        # ======================================
 
         if not os.path.exists(
             pdf_saida
@@ -502,18 +575,10 @@ def gerar_contrato(
                 "PDF não foi gerado."
             }
 
-        # ======================================
-        # URL PÚBLICA
-        # ======================================
-
         url_pdf = (
             f"{BASE_URL}/arquivos/"
             f"{os.path.basename(pdf_saida)}"
         )
-
-        # ======================================
-        # RETORNO
-        # ======================================
 
         return {
 
@@ -542,28 +607,3 @@ def gerar_contrato(
             "mensagem":
             str(erro)
         }
-
-from fastapi import Request
-
-VERIFY_TOKEN = "domum_verify"
-
-@app.get("/webhook")
-async def verify_webhook(
-    hub_mode: str = None,
-    hub_verify_token: str = None,
-    hub_challenge: str = None
-):
-    if hub_verify_token == VERIFY_TOKEN:
-        return int(hub_challenge)
-
-    return {"error": "Token inválido"}
-
-
-@app.post("/webhook")
-async def receive_webhook(request: Request):
-    data = await request.json()
-
-    print("Mensagem recebida:")
-    print(data)
-
-    return {"status": "ok"}
