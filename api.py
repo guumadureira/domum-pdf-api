@@ -23,7 +23,7 @@ import requests
 
 app = FastAPI(
     title="DOMUM PDF API",
-    version="4.0.0",
+    version="4.1.0",
     description="""
 API profissional para:
 
@@ -213,9 +213,15 @@ def responder_ia(mensagem_usuario):
 
     try:
 
+        print("\n============================")
+        print("CHAMANDO OPENAI")
+        print("============================")
+
+        print(f"Mensagem usuário: {mensagem_usuario}")
+
         resposta = client.chat.completions.create(
 
-            model="gpt-4.1-mini",
+            model="gpt-3.5-turbo",
 
             messages=[
 
@@ -225,21 +231,19 @@ def responder_ia(mensagem_usuario):
 Você é a assistente virtual da DOMUM Engenharia.
 
 Seu comportamento:
-
 - profissional
 - objetiva
 - amigável
 - clara
-- especialista em engenharia
 
 Você ajuda clientes com:
+- engenharia civil
 - propostas
 - contratos
 - obras
 - projetos
-- engenharia civil
 
-Nunca invente informações.
+Responda sempre em português.
 """
                 },
 
@@ -249,14 +253,25 @@ Nunca invente informações.
                 }
             ],
 
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=300
         )
 
-        return resposta.choices[0].message.content
+        texto = resposta.choices[0].message.content
+
+        print("\n============================")
+        print("RESPOSTA OPENAI")
+        print("============================")
+        print(texto)
+
+        return texto
 
     except Exception as erro:
 
-        print(f"Erro OpenAI: {erro}")
+        print("\n============================")
+        print("ERRO OPENAI")
+        print("============================")
+        print(str(erro))
 
         return (
             "Desculpe, ocorreu um erro no atendimento."
@@ -304,6 +319,9 @@ def enviar_whatsapp(numero, mensagem):
             timeout=30
         )
 
+        print("\n============================")
+        print("RESPOSTA WHATSAPP")
+        print("============================")
         print(response.status_code)
         print(response.text)
 
@@ -346,12 +364,11 @@ class ContratoRequest(BaseModel):
 # =========================================================
 
 @app.get("/")
-
 def home():
 
     return {
         "status": "API DOMUM ONLINE",
-        "versao": "4.0.0"
+        "versao": "4.1.0"
     }
 
 # =========================================================
@@ -433,7 +450,9 @@ async def receive_webhook(request: Request):
 
         texto = mensagem["text"]["body"]
 
-        print("\nTEXTO:")
+        print("\n============================")
+        print("TEXTO RECEBIDO")
+        print("============================")
         print(texto)
 
         # =========================================================
@@ -442,7 +461,9 @@ async def receive_webhook(request: Request):
 
         resposta_ia = responder_ia(texto)
 
-        print("\nRESPOSTA IA:")
+        print("\n============================")
+        print("ENVIANDO RESPOSTA")
+        print("============================")
         print(resposta_ia)
 
         enviar_whatsapp(
@@ -456,7 +477,10 @@ async def receive_webhook(request: Request):
 
     except Exception as erro:
 
-        print(f"Erro webhook: {erro}")
+        print("\n============================")
+        print("ERRO WEBHOOK")
+        print("============================")
+        print(str(erro))
 
         return JSONResponse(
 
@@ -473,7 +497,6 @@ async def receive_webhook(request: Request):
 # =========================================================
 
 @app.post("/gerar-proposta")
-
 def gerar_proposta(
     dados: PropostaRequest
 ):
@@ -595,7 +618,6 @@ def gerar_proposta(
 # =========================================================
 
 @app.post("/gerar-contrato")
-
 def gerar_contrato(
     dados: ContratoRequest
 ):
