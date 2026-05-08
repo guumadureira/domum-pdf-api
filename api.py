@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Request, Query
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from pydantic import BaseModel
@@ -7,30 +7,25 @@ from typing import List
 
 from docxtpl import DocxTemplate
 
-from openai import OpenAI
-
 from datetime import datetime
 
 import subprocess
 import os
 import re
 import time
-import requests
 
 # =========================================================
 # APP
 # =========================================================
 
 app = FastAPI(
-    title="DOMUM PDF API",
-    version="4.1.0",
+    title="DOMUM Engenharia API",
+    version="5.0.0",
     description="""
-API profissional para:
+API profissional para geração automática de:
 
-- WhatsApp Meta Cloud API
-- Atendimento IA com OpenAI
-- Geração automática de propostas
-- Geração automática de contratos
+- Propostas comerciais
+- Contratos empresariais
 - PDFs automáticos
 
 DOMUM Engenharia
@@ -46,49 +41,13 @@ PASTA_SAIDA = "pdfs_gerados"
 PROPOSTA_MODELO = "proposta_modelo.docx"
 CONTRATO_MODELO = "contrato_modelo.docx"
 
-# =========================================================
-# URL BASE
-# =========================================================
-
 BASE_URL = os.getenv(
     "BASE_URL",
     "https://web-production-a841e.up.railway.app"
 )
 
 # =========================================================
-# WHATSAPP META CONFIG
-# =========================================================
-
-VERIFY_TOKEN = os.getenv(
-    "VERIFY_TOKEN",
-    "domum_verify"
-)
-
-WHATSAPP_TOKEN = os.getenv(
-    "WHATSAPP_TOKEN",
-    ""
-)
-
-PHONE_NUMBER_ID = os.getenv(
-    "PHONE_NUMBER_ID",
-    ""
-)
-
-# =========================================================
-# OPENAI
-# =========================================================
-
-OPENAI_API_KEY = os.getenv(
-    "OPENAI_API_KEY",
-    ""
-)
-
-client = OpenAI(
-    api_key=OPENAI_API_KEY
-)
-
-# =========================================================
-# CRIAR PASTA AUTOMATICAMENTE
+# PASTA PDFs
 # =========================================================
 
 os.makedirs(
@@ -97,7 +56,7 @@ os.makedirs(
 )
 
 # =========================================================
-# SERVIR PDFs PUBLICAMENTE
+# ARQUIVOS PÚBLICOS
 # =========================================================
 
 app.mount(
@@ -105,6 +64,36 @@ app.mount(
     StaticFiles(directory=PASTA_SAIDA),
     name="arquivos"
 )
+
+# =========================================================
+# MODELS
+# =========================================================
+
+class PropostaRequest(BaseModel):
+
+    cliente: str
+    cidade: str
+    objeto: str
+    servicos: List[str]
+    valor: str
+    pagamento: str
+
+
+class ContratoRequest(BaseModel):
+
+    contratante: str
+    cpf: str
+    rg: str
+    profissao: str
+    endereco_proprietario: str
+    endereco_obra: str
+    telefone: str
+    email: str
+    cidade: str
+    objeto: str
+    servicos: List[str]
+    valor: str
+    pagamento: str
 
 # =========================================================
 # UTILIDADES
@@ -152,7 +141,7 @@ def limpar_nome(texto):
         texto
     )
 
-    return texto
+    return texto or "documento"
 
 
 def formatar_servicos(servicos):
@@ -173,6 +162,11 @@ def formatar_servicos(servicos):
 
 
 def converter_para_pdf(docx_saida):
+
+    """
+    Converte DOCX para PDF usando LibreOffice.
+    Compatível com Railway/Linux.
+    """
 
     try:
 
@@ -206,160 +200,6 @@ def converter_para_pdf(docx_saida):
         )
 
 # =========================================================
-# OPENAI IA
-# =========================================================
-
-def responder_ia(mensagem_usuario):
-
-    try:
-
-        print("\n============================")
-        print("CHAMANDO OPENAI")
-        print("============================")
-
-        print(f"Mensagem usuário: {mensagem_usuario}")
-
-        resposta = client.chat.completions.create(
-
-            model="gpt-3.5-turbo",
-
-            messages=[
-
-                {
-                    "role": "system",
-                    "content": """
-Você é a assistente virtual da DOMUM Engenharia.
-
-Seu comportamento:
-- profissional
-- objetiva
-- amigável
-- clara
-
-Você ajuda clientes com:
-- engenharia civil
-- propostas
-- contratos
-- obras
-- projetos
-
-Responda sempre em português.
-"""
-                },
-
-                {
-                    "role": "user",
-                    "content": mensagem_usuario
-                }
-            ],
-
-            temperature=0.7,
-            max_tokens=300
-        )
-
-        texto = resposta.choices[0].message.content
-
-        print("\n============================")
-        print("RESPOSTA OPENAI")
-        print("============================")
-        print(texto)
-
-        return texto
-
-    except Exception as erro:
-
-        print("\n============================")
-        print("ERRO OPENAI")
-        print("============================")
-        print(str(erro))
-
-        return (
-            "Desculpe, ocorreu um erro no atendimento."
-        )
-
-# =========================================================
-# WHATSAPP
-# =========================================================
-
-def enviar_whatsapp(numero, mensagem):
-
-    if not WHATSAPP_TOKEN:
-        print("WHATSAPP_TOKEN não configurado")
-        return
-
-    if not PHONE_NUMBER_ID:
-        print("PHONE_NUMBER_ID não configurado")
-        return
-
-    url = (
-        f"https://graph.facebook.com/v21.0/"
-        f"{PHONE_NUMBER_ID}/messages"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {
-            "body": mensagem
-        }
-    }
-
-    try:
-
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-
-        print("\n============================")
-        print("RESPOSTA WHATSAPP")
-        print("============================")
-        print(response.status_code)
-        print(response.text)
-
-    except Exception as erro:
-
-        print(f"Erro WhatsApp: {erro}")
-
-# =========================================================
-# MODELS
-# =========================================================
-
-class PropostaRequest(BaseModel):
-
-    cliente: str
-    cidade: str
-    objeto: str
-    servicos: List[str]
-    valor: str
-    pagamento: str
-
-
-class ContratoRequest(BaseModel):
-
-    contratante: str
-    cpf: str
-    rg: str
-    profissao: str
-    endereco_proprietario: str
-    endereco_obra: str
-    telefone: str
-    email: str
-    cidade: str
-    objeto: str
-    servicos: List[str]
-    valor: str
-    pagamento: str
-
-# =========================================================
 # STATUS API
 # =========================================================
 
@@ -368,129 +208,54 @@ def home():
 
     return {
         "status": "API DOMUM ONLINE",
-        "versao": "4.1.0"
+        "versao": "5.0.0"
     }
 
 # =========================================================
-# WEBHOOK META
+# PRIVACY POLICY
 # =========================================================
 
-@app.get("/webhook")
-async def verify_webhook(
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_policy():
 
-    hub_mode: str = Query(None, alias="hub.mode"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token"),
-    hub_challenge: str = Query(None, alias="hub.challenge")
+    return """
+    <html>
 
-):
+        <head>
+            <title>
+                Política de Privacidade - DOMUM Engenharia
+            </title>
+        </head>
 
-    print("VALIDANDO WEBHOOK...")
+        <body style="font-family: Arial; padding: 40px;">
 
-    if hub_verify_token == VERIFY_TOKEN:
+            <h1>
+                Política de Privacidade
+            </h1>
 
-        return PlainTextResponse(
-            content=hub_challenge
-        )
+            <p>
+                A DOMUM Engenharia respeita sua privacidade.
+            </p>
 
-    return JSONResponse(
+            <p>
+                Os dados enviados para esta aplicação são utilizados
+                exclusivamente para geração de propostas comerciais,
+                contratos e documentos empresariais.
+            </p>
 
-        status_code=403,
+            <p>
+                Nenhuma informação é vendida ou compartilhada
+                com terceiros.
+            </p>
 
-        content={
-            "error": "Token inválido"
-        }
-    )
+            <p>
+                DOMUM Engenharia
+            </p>
 
-@app.post("/webhook")
-async def receive_webhook(request: Request):
+        </body>
 
-    try:
-
-        data = await request.json()
-
-        print("\n============================")
-        print("MENSAGEM RECEBIDA")
-        print("============================")
-        print(data)
-
-        entry = data["entry"][0]
-
-        changes = entry["changes"][0]
-
-        value = changes["value"]
-
-        # Ignora status Meta
-        if "statuses" in value:
-
-            return {
-                "status": "status_update"
-            }
-
-        # Sem mensagens
-        if "messages" not in value:
-
-            return {
-                "status": "sem_mensagem"
-            }
-
-        mensagem = value["messages"][0]
-
-        numero = mensagem["from"]
-
-        tipo = mensagem["type"]
-
-        print(f"\nMensagem de {numero}")
-        print(f"Tipo: {tipo}")
-
-        if tipo != "text":
-
-            return {
-                "status": "tipo_nao_suportado"
-            }
-
-        texto = mensagem["text"]["body"]
-
-        print("\n============================")
-        print("TEXTO RECEBIDO")
-        print("============================")
-        print(texto)
-
-        # =========================================================
-        # IA RESPONDE
-        # =========================================================
-
-        resposta_ia = responder_ia(texto)
-
-        print("\n============================")
-        print("ENVIANDO RESPOSTA")
-        print("============================")
-        print(resposta_ia)
-
-        enviar_whatsapp(
-            numero,
-            resposta_ia
-        )
-
-        return {
-            "status": "ok"
-        }
-
-    except Exception as erro:
-
-        print("\n============================")
-        print("ERRO WEBHOOK")
-        print("============================")
-        print(str(erro))
-
-        return JSONResponse(
-
-            status_code=500,
-
-            content={
-                "status": "erro",
-                "mensagem": str(erro)
-            }
-        )
+    </html>
+    """
 
 # =========================================================
 # GERAR PROPOSTA
@@ -551,6 +316,10 @@ def gerar_proposta(
             f"{base}.pdf"
         )
 
+        # =====================================================
+        # GERAR DOCX
+        # =====================================================
+
         doc = DocxTemplate(
             PROPOSTA_MODELO
         )
@@ -563,9 +332,17 @@ def gerar_proposta(
             docx_saida
         )
 
+        # =====================================================
+        # GERAR PDF
+        # =====================================================
+
         converter_para_pdf(
             docx_saida
         )
+
+        # =====================================================
+        # VALIDAR PDF
+        # =====================================================
 
         if not os.path.exists(
             pdf_saida
@@ -581,6 +358,10 @@ def gerar_proposta(
                 }
             )
 
+        # =====================================================
+        # URL PÚBLICA
+        # =====================================================
+
         url_pdf = (
             f"{BASE_URL}/arquivos/"
             f"{os.path.basename(pdf_saida)}"
@@ -588,9 +369,11 @@ def gerar_proposta(
 
         return {
 
-            "status": "ok",
+            "status":
+            "ok",
 
-            "tipo": "proposta",
+            "tipo":
+            "proposta",
 
             "arquivo":
             os.path.basename(
@@ -608,8 +391,12 @@ def gerar_proposta(
             status_code=500,
 
             content={
-                "status": "erro",
-                "mensagem": str(erro)
+
+                "status":
+                "erro",
+
+                "mensagem":
+                str(erro)
             }
         )
 
@@ -693,6 +480,10 @@ def gerar_contrato(
             f"{base}.pdf"
         )
 
+        # =====================================================
+        # GERAR DOCX
+        # =====================================================
+
         doc = DocxTemplate(
             CONTRATO_MODELO
         )
@@ -705,9 +496,17 @@ def gerar_contrato(
             docx_saida
         )
 
+        # =====================================================
+        # GERAR PDF
+        # =====================================================
+
         converter_para_pdf(
             docx_saida
         )
+
+        # =====================================================
+        # VALIDAR PDF
+        # =====================================================
 
         if not os.path.exists(
             pdf_saida
@@ -723,6 +522,10 @@ def gerar_contrato(
                 }
             )
 
+        # =====================================================
+        # URL PÚBLICA
+        # =====================================================
+
         url_pdf = (
             f"{BASE_URL}/arquivos/"
             f"{os.path.basename(pdf_saida)}"
@@ -730,9 +533,11 @@ def gerar_contrato(
 
         return {
 
-            "status": "ok",
+            "status":
+            "ok",
 
-            "tipo": "contrato",
+            "tipo":
+            "contrato",
 
             "arquivo":
             os.path.basename(
@@ -750,7 +555,11 @@ def gerar_contrato(
             status_code=500,
 
             content={
-                "status": "erro",
-                "mensagem": str(erro)
+
+                "status":
+                "erro",
+
+                "mensagem":
+                str(erro)
             }
         )
