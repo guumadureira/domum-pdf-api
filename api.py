@@ -95,6 +95,40 @@ class ContratoRequest(BaseModel):
     valor: str
     pagamento: str
 
+    # =====================================================
+    # CONTROLE COMPLEMENTARES
+    # =====================================================
+
+    nao_inclui_complementares: bool = True
+
+    # =====================================================
+    # PROJETOS COMPLEMENTARES
+    # =====================================================
+
+    projeto_estrutural: bool = False
+    projeto_eletrico: bool = False
+    projeto_hidraulico: bool = False
+    projeto_ar_condicionado: bool = False
+    projeto_esgoto: bool = False
+    projeto_automacao: bool = False
+    projeto_som: bool = False
+    projeto_telefonia: bool = False
+    cabeamento_estruturado: bool = False
+
+    # =====================================================
+    # DETALHAMENTOS
+    # =====================================================
+
+    detalhamento_marcenaria: bool = False
+    detalhamento_marmoraria: bool = False
+
+    # =====================================================
+    # PLANTAS
+    # =====================================================
+
+    planta_forro: bool = False
+    planta_paginacao_piso: bool = False
+
 # =========================================================
 # UTILIDADES
 # =========================================================
@@ -456,6 +490,48 @@ def gerar_contrato(
 
             "DATA":
             data_atual()
+
+"NAO_INCLUI_COMPLEMENTARES":
+dados.nao_inclui_complementares,
+
+"PROJETO_ESTRUTURAL":
+dados.projeto_estrutural,
+
+"PROJETO_ELETRICO":
+dados.projeto_eletrico,
+
+"PROJETO_HIDRAULICO":
+dados.projeto_hidraulico,
+
+"PROJETO_AR_CONDICIONADO":
+dados.projeto_ar_condicionado,
+
+"PROJETO_ESGOTO":
+dados.projeto_esgoto,
+
+"PROJETO_AUTOMACAO":
+dados.projeto_automacao,
+
+"PROJETO_SOM":
+dados.projeto_som,
+
+"PROJETO_TELEFONIA":
+dados.projeto_telefonia,
+
+"CABEAMENTO_ESTRUTURADO":
+dados.cabeamento_estruturado,
+
+"DETALHAMENTO_MARCENARIA":
+dados.detalhamento_marcenaria,
+
+"DETALHAMENTO_MARMORARIA":
+dados.detalhamento_marmoraria,
+
+"PLANTA_FORRO":
+dados.planta_forro,
+
+"PLANTA_PAGINACAO_PISO":
+dados.planta_paginacao_piso,
         }
 
         nome = limpar_nome(
