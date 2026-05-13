@@ -489,7 +489,7 @@ def gerar_contrato(
             dados.pagamento,
 
             "DATA":
-            data_atual()
+            data_atual(),
 
 "NAO_INCLUI_COMPLEMENTARES":
 dados.nao_inclui_complementares,
