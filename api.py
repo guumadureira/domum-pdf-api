@@ -20,7 +20,7 @@ import time
 
 app = FastAPI(
     title="DOMUM Engenharia API",
-    version="5.0.0",
+    version="5.1.0",
     description="""
 API profissional para geração automática de:
 
@@ -75,8 +75,19 @@ class PropostaRequest(BaseModel):
     cidade: str
     objeto: str
     servicos: List[str]
-    valor: str
     pagamento: str
+
+    # =====================================================
+    # ORÇAMENTO
+    # =====================================================
+
+    tipo_orcamento: str = "outro"
+
+    valor_mao_obra: str
+    valor_total: str
+
+    possui_materiais: bool = False
+    valor_materiais: str = ""
 
 
 class ContratoRequest(BaseModel):
@@ -128,6 +139,7 @@ class ContratoRequest(BaseModel):
 
     planta_forro: bool = False
     planta_paginacao_piso: bool = False
+
 
 # =========================================================
 # UTILIDADES
@@ -233,6 +245,7 @@ def converter_para_pdf(docx_saida):
             "LibreOffice não encontrado no servidor."
         )
 
+
 # =========================================================
 # STATUS API
 # =========================================================
@@ -242,8 +255,9 @@ def home():
 
     return {
         "status": "API DOMUM ONLINE",
-        "versao": "5.0.0"
+        "versao": "5.1.0"
     }
+
 
 # =========================================================
 # PRIVACY POLICY
@@ -291,6 +305,7 @@ def privacy_policy():
     </html>
     """
 
+
 # =========================================================
 # GERAR PROPOSTA
 # =========================================================
@@ -318,8 +333,20 @@ def gerar_proposta(
                 dados.servicos
             ),
 
-            "VALOR":
-            dados.valor,
+            "TIPO_ORCAMENTO":
+            dados.tipo_orcamento,
+
+            "POSSUI_MATERIAIS":
+            dados.possui_materiais,
+
+            "VALOR_MAO_OBRA":
+            dados.valor_mao_obra,
+
+            "VALOR_MATERIAIS":
+            dados.valor_materiais,
+
+            "VALOR_TOTAL":
+            dados.valor_total,
 
             "PAGAMENTO":
             dados.pagamento,
@@ -434,6 +461,7 @@ def gerar_proposta(
             }
         )
 
+
 # =========================================================
 # GERAR CONTRATO
 # =========================================================
@@ -491,47 +519,47 @@ def gerar_contrato(
             "DATA":
             data_atual(),
 
-"NAO_INCLUI_COMPLEMENTARES":
-dados.nao_inclui_complementares,
+            "NAO_INCLUI_COMPLEMENTARES":
+            dados.nao_inclui_complementares,
 
-"PROJETO_ESTRUTURAL":
-dados.projeto_estrutural,
+            "PROJETO_ESTRUTURAL":
+            dados.projeto_estrutural,
 
-"PROJETO_ELETRICO":
-dados.projeto_eletrico,
+            "PROJETO_ELETRICO":
+            dados.projeto_eletrico,
 
-"PROJETO_HIDRAULICO":
-dados.projeto_hidraulico,
+            "PROJETO_HIDRAULICO":
+            dados.projeto_hidraulico,
 
-"PROJETO_AR_CONDICIONADO":
-dados.projeto_ar_condicionado,
+            "PROJETO_AR_CONDICIONADO":
+            dados.projeto_ar_condicionado,
 
-"PROJETO_ESGOTO":
-dados.projeto_esgoto,
+            "PROJETO_ESGOTO":
+            dados.projeto_esgoto,
 
-"PROJETO_AUTOMACAO":
-dados.projeto_automacao,
+            "PROJETO_AUTOMACAO":
+            dados.projeto_automacao,
 
-"PROJETO_SOM":
-dados.projeto_som,
+            "PROJETO_SOM":
+            dados.projeto_som,
 
-"PROJETO_TELEFONIA":
-dados.projeto_telefonia,
+            "PROJETO_TELEFONIA":
+            dados.projeto_telefonia,
 
-"CABEAMENTO_ESTRUTURADO":
-dados.cabeamento_estruturado,
+            "CABEAMENTO_ESTRUTURADO":
+            dados.cabeamento_estruturado,
 
-"DETALHAMENTO_MARCENARIA":
-dados.detalhamento_marcenaria,
+            "DETALHAMENTO_MARCENARIA":
+            dados.detalhamento_marcenaria,
 
-"DETALHAMENTO_MARMORARIA":
-dados.detalhamento_marmoraria,
+            "DETALHAMENTO_MARMORARIA":
+            dados.detalhamento_marmoraria,
 
-"PLANTA_FORRO":
-dados.planta_forro,
+            "PLANTA_FORRO":
+            dados.planta_forro,
 
-"PLANTA_PAGINACAO_PISO":
-dados.planta_paginacao_piso,
+            "PLANTA_PAGINACAO_PISO":
+            dados.planta_paginacao_piso,
         }
 
         nome = limpar_nome(
